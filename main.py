@@ -12,21 +12,38 @@ def get_connection():
         "PWD=SVVsvv@999;"
     )
 
-@app.get("/ascur")
-def get_customers():
+@app.get("/sales_today")
+def get_sales_today():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT curno, Cur, rate FROM ascur")
-    rows = cursor.fetchall()
+    # Query 1: Sales
+    cursor.execute("""
+        SELECT SUM(ISNULL(amount, 0)) AS sales
+        FROM astran
+        WHERE LEFT(account, 4) BETWEEN '4000' AND '4999'
+          AND type = 'C'
+          AND CONVERT(date, jvdate) = CONVERT(date, GETDATE())
+    """)
+    sales = cursor.fetchone()[0] or 0
 
-    data = []
-    for r in rows:
-        data.append({
-            "Currency#": r[0],   # curno
-            "Cur Name": r[1],    # Cur
-            "rate": r[2]         # rate
-        })
+    # Query 2: Sales Return
+    cursor.execute("""
+        SELECT SUM(ISNULL(amount, 0)) AS salesReturn
+        FROM astran
+        WHERE LEFT(account, 4) BETWEEN '4000' AND '4999'
+          AND type = 'D'
+          AND CONVERT(date, jvdate) = CONVERT(date, GETDATE())
+    """)
+    sales_return = cursor.fetchone()[0] or 0
 
     conn.close()
-    return data
+
+    # Calculate actual sales
+    actual_sales = float(sales) - float(sales_return)
+
+    return {
+        "sales": float(sales),
+        "sales_return": float(sales_return),
+        "actual_sales": actual_sales
+    }
